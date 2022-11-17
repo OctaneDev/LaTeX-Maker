@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QProgressBar
 )
-from PyQt6.QtGui import QAction, QFont, QCloseEvent
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt#, QThreadPool
+from PyQt6.QtGui import QAction, QFont
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
 from latex import build_pdf
 import os, platform, subprocess
 import sys
@@ -28,7 +28,7 @@ temp2 = "\n\\end{document}"
 
 fname = ''
 text = ''
-global prog
+
 titleFont = QFont('Helvetica', 32, QFont.Weight.Bold)
 subtitleFont = QFont('Helvetica', 20, QFont.Weight.Bold)
 
@@ -49,20 +49,19 @@ class BuildWorker(QObject):
         global fname
         global text
         tex = text
-        prog = self.prog
         try:
             self.buildBtn.setText('Building...')
-            prog.setValue(10)
+            self.prog.setValue(10)
             while '<py>' in tex and '</py>' in tex:
                 py = tex.split('<py>')[1].split('</py>')[0]
-                prog.setValue(5)
+                self.prog.setValue(5)
                 #print(py)
                 temp = "<py>" + py + "</py>"
-                prog.setValue(10)
+                self.prog.setValue(10)
                 #print(py)
                 with open('temp.py', 'wt', encoding='UTF-8') as tempy:
                     tempy.write(py)
-                prog.setValue(20)
+                self.prog.setValue(20)
                 python = ""
                 if platform.system() == 'Darwin':       # macOS
                     python = "python3"
@@ -70,30 +69,30 @@ class BuildWorker(QObject):
                     python = "python"
                 else:               
                     python = "python3"                    # linux variants
-                prog.setValue(30)
+                self.prog.setValue(30)
                 py_code = str(subprocess.check_output([python, 'temp.py'])).split("b'")[1].split("\\n'")[0].replace('\\\\', '\\').replace("\\n", "\\\\")
-                prog.setValue(50)
+                self.prog.setValue(50)
                 print(py_code)
-                prog.setValue(60)
+                self.prog.setValue(60)
                 tex = tex.replace(temp, py_code)
-                prog.setValue(70)
+                self.prog.setValue(70)
                 #win['tex'].update(tex)
             pdf = build_pdf(tex)
-            prog.setValue(80)
+            self.prog.setValue(80)
             if ".tex" in fname:
                 fname = fname[:len(fname) - 4]
-            prog.setValue(85)
+            self.prog.setValue(85)
             pdf.save_to(fname + '.pdf')
-            prog.setValue(90)
+            self.prog.setValue(90)
             pdfname = fname + ".pdf"
-            prog.setValue(95)
+            self.prog.setValue(95)
             if platform.system() == 'Darwin':       # macOS
                 subprocess.call(('open', pdfname))
             elif platform.system() == 'Windows':    # Windows
                 os.startfile(pdfname)
             else:                                   # linux variants
                 subprocess.call(('xdg-open', pdfname))
-            prog.setValue(100)
+            self.prog.setValue(100)
             self.buildBtn.setText('Build Complete!')
         except Exception as e:
             print(e)
@@ -202,13 +201,13 @@ class Main(QMainWindow):
         loadBtn = QPushButton('Load Template')
         self.buildBtn = QPushButton('Build')
         self.nameArea = QLineEdit()
-        prog = QProgressBar()
+        self.prog = QProgressBar()
         self.texArea = QTextEdit()
         self.texArea.isUndoRedoEnabled()
         self.texArea.textCursor().setKeepPositionOnInsert(True)
         self.texArea.setFont(QFont('Courier'))
         widgets = [
-            prog,
+            self.prog,
             self.texArea
         ]
         hwidgets1 = [
@@ -234,176 +233,24 @@ class Main(QMainWindow):
         widget.setMinimumSize(720,480)
         self.setCentralWidget(widget)
 
-        def new():
-            self.nameArea.setText('')
-            self.texArea.setText('')
-
-        def openF():
-            home_dir = ''#str(Path.home())
-            fname = QFileDialog.getOpenFileName(self, 'Open file', home_dir, 'TeX Files (*.tex)')
-            if fname[0]:
-                f = open(fname[0], 'r')
-                self.nameArea.setText(fname[0])
-                with f:
-                    self.texArea.setText(f.read())
-
-        def build():
-            if self.saveTex():
-                #statusBar = self.statusBar()
-                #statusBar.showMessage('Building PDF', 3000)
-                try:
-                    prog.setValue(0)
-                    self.thread = QThread()
-                    self.thread.setTerminationEnabled(True)
-                    self.worker = BuildWorker(self.thread, prog, self.buildBtn)
-                    self.worker.moveToThread(self.thread)
-                    self.thread.started.connect(self.worker.run)
-                    self.worker.finished.connect(self.thread.quit)
-                    self.worker.finished.connect(self.worker.deleteLater)
-                    self.thread.finished.connect(self.thread.deleteLater)
-                    self.thread.start()
-                    self.thread.setPriority(QThread.Priority.HighestPriority)
-                    #print(self.worker)
-                    #self.buildBtn.setEnabled(False)
-                    #self.thread.finished.connect(self.buildBtn.setEnabled(True))
-                except Exception as e:
-                    alert = QMessageBox()
-                    alert.setText('Something went bad on our end!')
-                    alert.exec()
-
-        def load_temp():
-            #print('loading...')
-            if '\\documentclass' in self.texArea.toPlainText():
-                alert = QMessageBox()
-                alert.setText('There is already a template loaded!')
-                alert.exec()
-            else:
-                temp = temp1 + self.texArea.toPlainText() + temp2
-                self.texArea.setText(temp)
-
-        def commands():
-            self.comms = Commands()
-            self.comms.show()
-
-        def about():
-            dlg = AboutDialog()
-            if dlg.exec():
-                print('OK')
-
-        newBtn.triggered.connect(new)
+        newBtn.triggered.connect(self.new)
         newBtn.setShortcut('Ctrl+N')
-        openBtn.triggered.connect(openF)
+        openBtn.triggered.connect(self.openF)
         openBtn.setShortcut('Ctrl+O')
         saveBtn.triggered.connect(self.saveTex)
         saveBtn.setShortcut('Ctrl+S')
-        loadBtn.clicked.connect(load_temp)
-        loadBtn2.triggered.connect(load_temp)
+        loadBtn.clicked.connect(self.load_temp)
+        loadBtn2.triggered.connect(self.load_temp)
         loadBtn2.setShortcut('F12')
-        self.buildBtn.clicked.connect(build)
-        buildBtn2.triggered.connect(build)
+        self.buildBtn.clicked.connect(self.build)
+        buildBtn2.triggered.connect(self.build)
         buildBtn2.setShortcut('F5')
 
-        comBtn.triggered.connect(commands)
+        comBtn.triggered.connect(self.commands)
         comBtn.setShortcut('F1')
-        aboutBtn.triggered.connect(about)
+        aboutBtn.triggered.connect(self.about)
         aboutBtn.setShortcut('Ctrl+I')
-
-        def getTex():
-            shorts = {'-t-':'\\title{}','-sec-':'\\section{}','-subsec-':'\\subsection{}','-b-':'\\textbf{}','-i-':'\\textit{}','-u-':'\\underline{}','-emph-':'\\emph{}','-ul-':'\\begin{itemize}\n\\item \n\\end{itemize}','-ol-':'\\begin{enumerate}\n\\item \n\\end{enumerate}','-li-':'\\item','-ma-':'\\begin{math}\n \n\\end{math}','-frac-':'\\frac{}{}','-ce-':'\\ce{}','-py-':'<py></py>','-ig-':'\\includegraphics{}','-center-':'\\centering '}
-            tex = self.texArea.toPlainText()
-            c = self.texArea.textCursor()
-            a = c.anchor()
-            for i in shorts:
-                if i in tex:
-                    ls = len(i)
-                    lt = len(shorts[i])
-                    self.texArea.setText(tex.replace(i, shorts[i]))
-                    if '{}{}' in shorts[i]:
-                        c.setPosition(a+lt-(ls+3))
-                    elif '{}' in shorts[i]:
-                        c.setPosition(a+lt-(ls+1))
-                    elif '\\begin' in shorts[i]:
-                        segments = shorts[i].split('\n')
-                        #print(segments)
-                        skip = -1
-                        if '\item ' in segments or '\\item ' in segments:
-                            skip -= 6
-                            #print(skip)
-                        for i in range(0,len(segments)-1):
-                            #print(segments[i])
-                            skip += len(segments[i])
-                        c.setPosition(a+lt-(ls+skip))
-                    else:
-                        c.setPosition(a+lt-(ls+1))
-                    self.texArea.setTextCursor(c)
-
-            """
-            if '-t-' in tex:
-                self.texArea.setText(tex.replace('-t-', '\\title{}'))
-                c.setPosition(a+4)
-                self.texArea.setTextCursor(c)
-            if '-sec-' in tex:
-                self.texArea.setText(tex.replace('-sec-', '\\section{}'))
-                c.setPosition(a+4)
-                self.texArea.setTextCursor(c)
-            if '-subsec-' in tex:
-                self.texArea.setText(tex.replace('-subsec-', '\\subsection{}'))
-                c.setPosition(a+4)
-                self.texArea.setTextCursor(c)
-            if '-b-' in tex:
-                self.texArea.setText(tex.replace('-b-', '\\textbf{}'))
-                c.setPosition(a+5)
-                self.texArea.setTextCursor(c)
-            if '-i-' in tex:
-                self.texArea.setText(tex.replace('-i-', '\\textit{}'))
-                c.setPosition(a+5)
-                self.texArea.setTextCursor(c)
-            if '-u-' in tex:
-                self.texArea.setText(tex.replace('-u-', '\\underline{}'))
-                c.setPosition(a+8)
-                self.texArea.setTextCursor(c)
-            if '-emph-' in tex:
-                self.texArea.setText(tex.replace('-emph-', '\\emph{}'))
-                c.setPosition(a)
-                self.texArea.setTextCursor(c)
-            if '-ul-' in tex:
-                self.texArea.setText(tex.replace('-ul-', '\\begin{itemize}\n\\item \n\\end{itemize}'))
-                c.setPosition(a+18)
-                self.texArea.setTextCursor(c)
-            if '-ol-' in tex:
-                self.texArea.setText(tex.replace('-ol-', '\\begin{enumerate}\n\\item \n\\end{enumerate}'))
-                c.setPosition(a+20)
-                self.texArea.setTextCursor(c)
-            if '-li-' in tex:
-                self.texArea.setText(tex.replace('-li-', '\\item '))
-                c.setPosition(a+2)
-                self.texArea.setTextCursor(c)
-            if '-ma-' in tex:
-                self.texArea.setText(tex.replace('-ma-', '\\begin{math}\n\n\\end{math}'))
-                c.setPosition(a+9)
-                self.texArea.setTextCursor(c)
-            if '-frac-' in tex:
-                self.texArea.setText(tex.replace('-frac-', '\\frac{}{}'))
-                c.setPosition(a)
-                self.texArea.setTextCursor(c)
-            if '-ce-' in tex:
-                self.texArea.setText(tex.replace('-ce-', '\\ce{}'))
-                c.setPosition(a)
-                self.texArea.setTextCursor(c)
-            if '-py-' in tex:
-                self.texArea.setText(tex.replace('-py-', '<py></py>'))
-                c.setPosition(a)
-                self.texArea.setTextCursor(c)
-            if '-ig-' in tex:
-                self.texArea.setText(tex.replace('-ig-', '\\includegraphics{}'))
-                c.setPosition(a+13)
-                self.texArea.setTextCursor(c)
-            if '-center-' in tex:
-                self.texArea.setText(tex.replace('-center-', '\\centering '))
-                c.setPosition(a+3)
-                self.texArea.setTextCursor(c)
-            """
-        self.texArea.textChanged.connect(getTex)
+        self.texArea.textChanged.connect(self.getTex)
 
     def saveTex(self, closing=False):
         try:
@@ -432,10 +279,163 @@ class Main(QMainWindow):
                         alert = QMessageBox()
                         alert.setText('Saved!')
                         alert.exec()
-                    return True
+                return True
         except Exception as e:
             print(e)
             return False
+            
+    def new(self):
+        self.nameArea.setText('')
+        self.texArea.setText('')
+
+    def openF(self):
+        home_dir = ''#str(Path.home())
+        fname = QFileDialog.getOpenFileName(self, 'Open file', home_dir, 'TeX Files (*.tex)')
+        if fname[0]:
+            f = open(fname[0], 'r')
+            self.nameArea.setText(fname[0])
+            with f:
+                self.texArea.setText(f.read())
+
+    def build(self):
+        if self.saveTex():
+            #statusBar = self.statusBar()
+            #statusBar.showMessage('Building PDF', 3000)
+            try:
+                self.prog.setValue(0)
+                self.thread = QThread()
+                self.thread.setTerminationEnabled(True)
+                self.worker = BuildWorker(self.thread, self.prog, self.buildBtn)
+                self.worker.moveToThread(self.thread)
+                self.thread.started.connect(self.worker.run)
+                self.worker.finished.connect(self.thread.quit)
+                self.worker.finished.connect(self.worker.deleteLater)
+                self.thread.finished.connect(self.thread.deleteLater)
+                self.thread.start()
+                self.thread.setPriority(QThread.Priority.HighestPriority)
+                #print(self.worker)
+                #self.buildBtn.setEnabled(False)
+                #self.thread.finished.connect(self.buildBtn.setEnabled(True))
+            except Exception as e:
+                alert = QMessageBox()
+                alert.setText('Something went bad on our end!')
+                alert.exec()
+                print(e)
+
+    def load_temp(self):
+        #print('loading...')
+        if '\\documentclass' in self.texArea.toPlainText():
+            alert = QMessageBox()
+            alert.setText('There is already a template loaded!')
+            alert.exec()
+        else:
+            temp = temp1 + self.texArea.toPlainText() + temp2
+            self.texArea.setText(temp)
+
+    def commands(self):
+        self.comms = Commands()
+        self.comms.show()
+
+    def about(self):
+        dlg = AboutDialog()
+        if dlg.exec():
+            print('OK')
+
+    def getTex(self):
+        shorts = {'-t-':'\\title{}','-sec-':'\\section{}','-subsec-':'\\subsection{}','-b-':'\\textbf{}','-i-':'\\textit{}','-u-':'\\underline{}','-emph-':'\\emph{}','-ul-':'\\begin{itemize}\n\\item \n\\end{itemize}','-ol-':'\\begin{enumerate}\n\\item \n\\end{enumerate}','-li-':'\\item','-ma-':'\\begin{math}\n \n\\end{math}','-frac-':'\\frac{}{}','-ce-':'\\ce{}','-py-':'<py></py>','-ig-':'\\includegraphics{}','-center-':'\\centering '}
+        tex = self.texArea.toPlainText()
+        c = self.texArea.textCursor()
+        a = c.anchor()
+        for i in shorts:
+            if i in tex:
+                ls = len(i)
+                lt = len(shorts[i])
+                self.texArea.setText(tex.replace(i, shorts[i]))
+                if '{}{}' in shorts[i]:
+                    c.setPosition(a+lt-(ls+3))
+                elif '{}' in shorts[i]:
+                    c.setPosition(a+lt-(ls+1))
+                elif '\\begin' in shorts[i]:
+                    segments = shorts[i].split('\n')
+                    #print(segments)
+                    skip = -1
+                    if '\item ' in segments or '\\item ' in segments:
+                        skip -= 6
+                        #print(skip)
+                    for i in range(0,len(segments)-1):
+                        #print(segments[i])
+                        skip += len(segments[i])
+                    c.setPosition(a+lt-(ls+skip))
+                else:
+                    c.setPosition(a+lt-(ls+1))
+                self.texArea.setTextCursor(c)
+
+        """
+        if '-t-' in tex:
+            self.texArea.setText(tex.replace('-t-', '\\title{}'))
+            c.setPosition(a+4)
+            self.texArea.setTextCursor(c)
+        if '-sec-' in tex:
+            self.texArea.setText(tex.replace('-sec-', '\\section{}'))
+            c.setPosition(a+4)
+            self.texArea.setTextCursor(c)
+        if '-subsec-' in tex:
+            self.texArea.setText(tex.replace('-subsec-', '\\subsection{}'))
+            c.setPosition(a+4)
+            self.texArea.setTextCursor(c)
+        if '-b-' in tex:
+            self.texArea.setText(tex.replace('-b-', '\\textbf{}'))
+            c.setPosition(a+5)
+            self.texArea.setTextCursor(c)
+        if '-i-' in tex:
+            self.texArea.setText(tex.replace('-i-', '\\textit{}'))
+            c.setPosition(a+5)
+            self.texArea.setTextCursor(c)
+        if '-u-' in tex:
+            self.texArea.setText(tex.replace('-u-', '\\underline{}'))
+            c.setPosition(a+8)
+            self.texArea.setTextCursor(c)
+        if '-emph-' in tex:
+            self.texArea.setText(tex.replace('-emph-', '\\emph{}'))
+            c.setPosition(a)
+            self.texArea.setTextCursor(c)
+        if '-ul-' in tex:
+            self.texArea.setText(tex.replace('-ul-', '\\begin{itemize}\n\\item \n\\end{itemize}'))
+            c.setPosition(a+18)
+            self.texArea.setTextCursor(c)
+        if '-ol-' in tex:
+            self.texArea.setText(tex.replace('-ol-', '\\begin{enumerate}\n\\item \n\\end{enumerate}'))
+            c.setPosition(a+20)
+            self.texArea.setTextCursor(c)
+        if '-li-' in tex:
+            self.texArea.setText(tex.replace('-li-', '\\item '))
+            c.setPosition(a+2)
+            self.texArea.setTextCursor(c)
+        if '-ma-' in tex:
+            self.texArea.setText(tex.replace('-ma-', '\\begin{math}\n\n\\end{math}'))
+            c.setPosition(a+9)
+            self.texArea.setTextCursor(c)
+        if '-frac-' in tex:
+            self.texArea.setText(tex.replace('-frac-', '\\frac{}{}'))
+            c.setPosition(a)
+            self.texArea.setTextCursor(c)
+        if '-ce-' in tex:
+            self.texArea.setText(tex.replace('-ce-', '\\ce{}'))
+            c.setPosition(a)
+            self.texArea.setTextCursor(c)
+        if '-py-' in tex:
+            self.texArea.setText(tex.replace('-py-', '<py></py>'))
+            c.setPosition(a)
+            self.texArea.setTextCursor(c)
+        if '-ig-' in tex:
+            self.texArea.setText(tex.replace('-ig-', '\\includegraphics{}'))
+            c.setPosition(a+13)
+            self.texArea.setTextCursor(c)
+        if '-center-' in tex:
+            self.texArea.setText(tex.replace('-center-', '\\centering '))
+            c.setPosition(a+3)
+            self.texArea.setTextCursor(c)
+        """
 
     def closeEvent(self, event):
         alert = QMessageBox().question(self, 'Save your work?', 'Would you like to save before closing?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
