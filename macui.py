@@ -16,7 +16,8 @@ from PyQt6.QtWidgets import (
     QProgressBar
 )
 from PyQt6.QtGui import QAction, QFont
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
+from PyQt6.QtCore import QThread, QObject, pyqtSignal as Signal, pyqtSlot as Slot
+from PyQt6.QtCore import Qt
 from latex import build_pdf
 import os, platform, subprocess
 import sys
@@ -25,81 +26,151 @@ import os
 
 temp1 = "\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}\n\\usepackage{graphicx}\n\\usepackage{mhchem} \\RequirePackage{amsmath,amssymb,latexsym}\n\\author{You}\n\\title{Title}\n\\date{\\today}\n\\begin{document}\n\\maketitle\n"
 temp2 = "\n\\end{document}"
-
 fname = ''
-text = ''
 
 titleFont = QFont('Helvetica', 32, QFont.Weight.Bold)
 subtitleFont = QFont('Helvetica', 20, QFont.Weight.Bold)
 
-ver = '0.0.2-d'
+ver = '0.0.3-d'
 app_name = 'LaTeX Maker'
 
-class BuildWorker(QObject):
-    finished = pyqtSignal()
-    progress = pyqtSignal(int)
+class BuildWorker(QThread):
+    progress = Signal(int)
+    finished = Signal(int)
 
-    def __init__(self, thread, prog, buildBtn):
-        super(BuildWorker, self).__init__()
-        self.m_thread = thread
-        self.prog = prog
-        self.buildBtn = buildBtn
-
-    def run(self):
-        global fname
-        global text
-        tex = text
+    @Slot(str)
+    def run(self, tex):
         try:
-            self.buildBtn.setText('Building...')
-            self.prog.setValue(10)
-            while '<py>' in tex and '</py>' in tex:
-                py = tex.split('<py>')[1].split('</py>')[0]
-                self.prog.setValue(5)
-                #print(py)
+            global fname
+            self.progress.emit(10)
+            allpy = ''
+            index = 0
+            py_outs = []
+            prints = []
+            rem = []
+            stripped = tex
+            while '<py>' in stripped and '</py>' in stripped:
+                py = stripped.split('<py>')[1].split('</py>')[0]
+                allpy = allpy + py + '\n'
+                self.progress.emit(5)
                 temp = "<py>" + py + "</py>"
-                self.prog.setValue(10)
-                #print(py)
-                with open('temp.py', 'wt', encoding='UTF-8') as tempy:
-                    tempy.write(py)
-                self.prog.setValue(20)
-                python = ""
-                if platform.system() == 'Darwin':       # macOS
-                    python = "python3"
-                elif platform.system() == 'Windows':    # Windows
-                    python = "python"
-                else:               
-                    python = "python3"                    # linux variants
-                self.prog.setValue(30)
+                rem.append(temp)
+                stripped = stripped.replace(temp, '')
+                prev = 0
+                for i in prints:
+                    prev += i
+                try:
+                    p = allpy.count('print(') - prev
+                    print(p, prev)
+                except:
+                    p = allpy.count('print(')
+                prints.append(p)
+                index += 1
+            #print(temp)
+            self.progress.emit(10)
+            with open('temp.py', 'wt', encoding='UTF-8') as tempy:
+                tempy.write(allpy)
+            self.progress.emit(20)
+            python = ""
+            if platform.system() == 'Darwin':       # macOS
+                python = "python3"
+            elif platform.system() == 'Windows':    # Windows
+                python = "python"
+            else:               
+                python = "python3"                    # linux variants
+            self.progress.emit(30)
+            temptex = tex
+            try:
+                #print('try')
+                rem1 = rem
+                py_code = str(subprocess.check_output([python, 'temp.py'])).split("b'")[1].split("\\n'")[0].replace('\\\\', '\\').replace("\\n", "\n")
+                #print(py_code)
+                #print(py_outs)
+                #print(index, py_code, py_outs, prints)
+                if py_code == "'":
+                    py_code = ''
+                if index != 0:
+                    #print(prints)
+                    if index > 1:
+                        py_outs = py_code.split('\\\\')
+                        #print(py_outs)
+                        rep = ''
+                        for i in range(index):
+                            rep = ''
+                            for j in range(prints[i]):
+                                #print(index, i, j)
+                                rep = rep + py_outs[i+j]
+                                if prints[i] > 1 and j < prints[i]-1:
+                                    rep = rep + ' \\\\\n'
+                                #print(rep)
+                            temptex = temptex.replace(rem1[i],rep)
+                    #elif index > 1:
+                    #    py_code.replace(py_outs[0], '')
+                    #    py_outs.append(py_code)
+                        #print(py_code,py_outs)
+                    else: temptex = temptex.replace(rem1[0],py_code)
+                    tex = temptex
+            except:
+                #print('except')
+                rem2 = rem
                 py_code = str(subprocess.check_output([python, 'temp.py'])).split("b'")[1].split("\\n'")[0].replace('\\\\', '\\').replace("\\n", "\\\\")
-                self.prog.setValue(50)
-                print(py_code)
-                self.prog.setValue(60)
-                tex = tex.replace(temp, py_code)
-                self.prog.setValue(70)
-                #win['tex'].update(tex)
+                #print(py_code)
+                #print(py_outs)
+                #print(index, py_code, py_outs)
+                if py_code == "'":
+                    py_code = ''
+                if index != 0:
+                    #print(prints)
+                    if index > 1:
+                        py_outs = py_code.split('\\\\')
+                        #print(py_outs)
+                        rep = ''
+                        offset = 0
+                        for i in range(index):
+                            rep = ''
+                            for j in range(prints[i]):
+                                #print('Index, i, j:', index, i, j)
+                                if j > 1: offset += 1
+                                else: offset += j
+                                rep = rep + py_outs[i+offset]
+                                if prints[i] > 1 and j < prints[i]-1:
+                                    rep = rep + ' \\\\\n'
+                                    #print('extra run')
+                                #print('rep', rep)
+                            tex = tex.replace(rem2[i],rep)
+                            #print(rem2[i])
+                    #elif index > 1:
+                    #    py_code.replace(py_outs[0], '')
+                    #    py_outs.append(py_code)
+                        #print(py_code,py_outs)
+                    else: tex = tex.replace(rem2[0],py_code)
+            self.progress.emit(50)
+            #print(index, py_outs)
+            self.progress.emit(60)
+            self.progress.emit(70)
+            ####
+            #print(tex)
             pdf = build_pdf(tex)
-            self.prog.setValue(80)
+            self.progress.emit(80)
             if ".tex" in fname:
                 fname = fname[:len(fname) - 4]
-            self.prog.setValue(85)
+            self.progress.emit(85)
             pdf.save_to(fname + '.pdf')
-            self.prog.setValue(90)
+            self.progress.emit(90)
             pdfname = fname + ".pdf"
-            self.prog.setValue(95)
+            self.progress.emit(95)
             if platform.system() == 'Darwin':       # macOS
                 subprocess.call(('open', pdfname))
             elif platform.system() == 'Windows':    # Windows
                 os.startfile(pdfname)
             else:                                   # linux variants
                 subprocess.call(('xdg-open', pdfname))
-            self.prog.setValue(100)
-            self.buildBtn.setText('Build Complete!')
+            self.progress.emit(100)
+            self.finished.emit(100)
         except Exception as e:
             print(e)
-            self.buildBtn.setText('Build Failed!')
-            self.m_thread.quit()
-        #if self.m_thread:
-        self.m_thread.quit()
+            self.progress.emit(0)
+            self.finished.emit(0)
 
 class AboutDialog(QDialog):
     def __init__(self):
@@ -168,6 +239,8 @@ class Commands(QWidget):
         self.setLayout(layout)
 
 class Main(QMainWindow):
+    work_requested = Signal(str)
+
     def __init__(self):
         super(Main, self).__init__()
         global temp1
@@ -202,6 +275,7 @@ class Main(QMainWindow):
         self.buildBtn = QPushButton('Build')
         self.nameArea = QLineEdit()
         self.prog = QProgressBar()
+        self.prog.setMaximum(100)
         self.texArea = QTextEdit()
         self.texArea.isUndoRedoEnabled()
         self.texArea.textCursor().setKeepPositionOnInsert(True)
@@ -303,24 +377,37 @@ class Main(QMainWindow):
             #statusBar.showMessage('Building PDF', 3000)
             try:
                 self.prog.setValue(0)
-                self.thread = QThread()
+                self.thread = QThread(parent=self)
                 self.thread.setTerminationEnabled(True)
-                self.worker = BuildWorker(self.thread, self.prog, self.buildBtn)
-                self.worker.moveToThread(self.thread)
-                self.thread.started.connect(self.worker.run)
+                self.worker = BuildWorker()
+                self.worker.progress.connect(self.updateProg)
+                self.work_requested.connect(self.worker.run)
+                self.work_requested.emit(self.texArea.toPlainText())
+                self.worker.finished.connect(self.complete)
                 self.worker.finished.connect(self.thread.quit)
                 self.worker.finished.connect(self.worker.deleteLater)
                 self.thread.finished.connect(self.thread.deleteLater)
+                self.worker.moveToThread(self.thread)
                 self.thread.start()
                 self.thread.setPriority(QThread.Priority.HighestPriority)
-                #print(self.worker)
-                #self.buildBtn.setEnabled(False)
-                #self.thread.finished.connect(self.buildBtn.setEnabled(True))
             except Exception as e:
                 alert = QMessageBox()
                 alert.setText('Something went bad on our end!')
                 alert.exec()
                 print(e)
+
+    def updateProg(self, v):
+        self.buildBtn.setText('Building...')
+        self.prog.setValue(v)
+        QApplication.processEvents()
+        if v == 100:
+            self.complete()
+        elif v == 0:
+            self.buildBtn.setText('Build Failed!')
+
+    def complete(self):
+        self.buildBtn.setText('Build Complete!')
+        self.prog.setValue(100)
 
     def load_temp(self):
         #print('loading...')
@@ -342,7 +429,7 @@ class Main(QMainWindow):
             print('OK')
 
     def getTex(self):
-        shorts = {'-t-':'\\title{}','-sec-':'\\section{}','-subsec-':'\\subsection{}','-b-':'\\textbf{}','-i-':'\\textit{}','-u-':'\\underline{}','-emph-':'\\emph{}','-ul-':'\\begin{itemize}\n\\item \n\\end{itemize}','-ol-':'\\begin{enumerate}\n\\item \n\\end{enumerate}','-li-':'\\item','-ma-':'\\begin{math}\n \n\\end{math}','-frac-':'\\frac{}{}','-ce-':'\\ce{}','-py-':'<py></py>','-ig-':'\\includegraphics{}','-center-':'\\centering '}
+        shorts = {'-t-':'\\title{}','-sec-':'\\section{}','-subsec-':'\\subsection{}','-b-':'\\textbf{}','-i-':'\\textit{}','-u-':'\\underline{}','-emph-':'\\emph{}','-ul-':'\\begin{itemize}\n\\item \n\\end{itemize}','-ol-':'\\begin{enumerate}\n\\item \n\\end{enumerate}','-li-':'\\item ','-ma-':'\\begin{math}\n \n\\end{math}','-frac-':'\\frac{}{}','-ce-':'\\ce{}','-py-':'<py></py>','-ig-':'\\includegraphics{}','-center-':'\\centering '}
         tex = self.texArea.toPlainText()
         c = self.texArea.textCursor()
         a = c.anchor()
@@ -366,8 +453,10 @@ class Main(QMainWindow):
                         #print(segments[i])
                         skip += len(segments[i])
                     c.setPosition(a+lt-(ls+skip))
+                elif '<py>' in shorts[i]:
+                    c.setPosition(a+lt-(ls+5))
                 else:
-                    c.setPosition(a+lt-(ls+1))
+                    c.setPosition(a+lt-ls)
                 self.texArea.setTextCursor(c)
 
         """
