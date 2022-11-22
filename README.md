@@ -7,4 +7,4 @@ This is the first project I made with PyQt, so I am still working on optimizing 
 ## Requirements
 - Python 3
 - PySide6
-- Latex
+- LaTeX
