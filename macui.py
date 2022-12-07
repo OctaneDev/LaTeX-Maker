@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QProgressBar
 )
 from PyQt6.QtGui import QAction, QFont
-from PyQt6.QtCore import QThread, QObject, pyqtSignal as Signal, pyqtSlot as Slot
+from PyQt6.QtCore import QThread, pyqtSignal as Signal, pyqtSlot as Slot
 from PyQt6.QtCore import Qt
 from latex import build_pdf
 import os, platform, subprocess
@@ -31,7 +31,7 @@ fname = ''
 titleFont = QFont('Helvetica', 32, QFont.Weight.Bold)
 subtitleFont = QFont('Helvetica', 20, QFont.Weight.Bold)
 
-ver = '0.0.3-d'
+ver = '0.0.4-d'
 app_name = 'LaTeX Maker'
 
 class BuildWorker(QThread):
@@ -61,7 +61,7 @@ class BuildWorker(QThread):
                     prev += i
                 try:
                     p = allpy.count('print(') - prev
-                    print(p, prev)
+                    #print(p, prev)
                 except:
                     p = allpy.count('print(')
                 prints.append(p)
@@ -210,8 +210,10 @@ class Commands(QWidget):
             QLabel(''),
             QLabel('Text'),
             QLabel('Title:\t\t\t\t-t-'),
+            QLabel('Chapter:\t\t\t-ch-'),
             QLabel('Section:\t\t\t-sec-'),
             QLabel('Subsection:\t\t\t-subsec-'),
+            QLabel('Subsubsection:\t\t\t-subsub-'),
             QLabel('Bold:\t\t\t\t-b-'),
             QLabel('Italic:\t\t\t\t-i-'),
             QLabel('Underline:\t\t\t-u-'),
@@ -219,6 +221,7 @@ class Commands(QWidget):
             QLabel('Unordered Lists:\t\t-ul-'),
             QLabel('Ordered Lists:\t\t\t-ol-'),
             QLabel('List Item:\t\t\t-li-'),
+            QLabel('Quote:\t\t\t\t-q-'),
             QLabel('\nMath and Computation'),
             QLabel('Eqations Section:\t\t-ma-'),
             QLabel('Fraction:\t\t\t-frac-'),
@@ -231,7 +234,7 @@ class Commands(QWidget):
         for w in widgets:
             if widgets.index(w) == 0:
                 w.setFont(titleFont)
-            elif widgets.index(w) == 2 or widgets.index(w) == 13 or widgets.index(w) == 18:
+            elif widgets.index(w) == 2 or widgets.index(w) == 16 or widgets.index(w) == 21:
                 w.setFont(subtitleFont)
             else:
                 w.setFont(comFont)
@@ -429,7 +432,7 @@ class Main(QMainWindow):
             print('OK')
 
     def getTex(self):
-        shorts = {'-t-':'\\title{}','-sec-':'\\section{}','-subsec-':'\\subsection{}','-b-':'\\textbf{}','-i-':'\\textit{}','-u-':'\\underline{}','-emph-':'\\emph{}','-ul-':'\\begin{itemize}\n\\item \n\\end{itemize}','-ol-':'\\begin{enumerate}\n\\item \n\\end{enumerate}','-li-':'\\item ','-ma-':'\\begin{math}\n \n\\end{math}','-frac-':'\\frac{}{}','-ce-':'\\ce{}','-py-':'<py></py>','-ig-':'\\includegraphics{}','-center-':'\\centering '}
+        shorts = {'-t-':'\\title{}','-ch-':'\\chapter{}','-sec-':'\\section{}','-subsec-':'\\subsection{}','-subsub-':'\\subsubsection{}','-b-':'\\textbf{}','-i-':'\\textit{}','-u-':'\\underline{}','-emph-':'\\emph{}','-ul-':'\\begin{itemize}\n\\item \n\\end{itemize}','-ol-':'\\begin{enumerate}\n\\item \n\\end{enumerate}','-li-':'\\item ','-ma-':'\\begin{math}\n \n\\end{math}','-q-':'\\begin{quote}\n \n\\end{quote}','-frac-':'\\frac{}{}','-ce-':'\\ce{}','-py-':'<py></py>','-ig-':'\\includegraphics{}','-center-':'\\centering '}
         tex = self.texArea.toPlainText()
         c = self.texArea.textCursor()
         a = c.anchor()
